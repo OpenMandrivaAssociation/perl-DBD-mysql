@@ -2,7 +2,7 @@
 
 Summary:	MySQL-Perl bindings
 Name:		perl-%{module}
-Version:	4.003
+Version:	4.004
 Release:	%mkrel 1
 License:	GPL
 Group:		Development/Databases
