@@ -15,7 +15,6 @@ BuildRequires:	zlib-devel
 BuildRequires:	openssl-devel
 Provides:	perl-Mysql
 Obsoletes:	perl-Mysql
-Buildroot:	%{_tmppath}/%{name}-%{version}
 
 %description
 DBD::mysql is an interface driver for connecting the DBMS independent Perl API
