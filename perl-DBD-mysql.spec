@@ -3,7 +3,7 @@
 Summary:	MySQL-Perl bindings
 Name:		perl-%{module}
 Version:	4.008
-Release:	%mkrel 1
+Release:	%mkrel 2
 License:	GPL
 Group:		Development/Databases
 URL:		http://search.cpan.org/dist/%{module}
@@ -15,7 +15,7 @@ BuildRequires:	zlib-devel
 BuildRequires:	openssl-devel
 Provides:	perl-Mysql
 Obsoletes:	perl-Mysql
-Buildroot:	%{_tmppath}/%{name}-%{version}
+BuildRoot:	%{_tmppath}/%{name}-%{version}-%{release}-buildroot
 
 %description
 DBD::mysql is an interface driver for connecting the DBMS independent Perl API
