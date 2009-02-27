@@ -1,9 +1,10 @@
 %define	module DBD-mysql
+%define Werror_cflags %nil
 
 Summary:	MySQL-Perl bindings
 Name:		perl-%{module}
-Version:	4.008
-Release:	%mkrel 2
+Version:	4.010
+Release:	%mkrel 1
 License:	GPL
 Group:		Development/Databases
 URL:		http://search.cpan.org/dist/%{module}
