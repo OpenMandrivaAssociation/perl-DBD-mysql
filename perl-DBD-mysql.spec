@@ -1,22 +1,25 @@
-%define	module DBD-mysql
+%define	upstream_name    DBD-mysql
+%define	upstream_version 4.012
 %define Werror_cflags %nil
 
-Summary:	MySQL-Perl bindings
-Name:		perl-%{module}
-Version:	4.011
+Name:		perl-%{upstream_name}
+Version:	%perl_convert_version %{upstream_version}
 Release:	%mkrel 1
+
+Summary:	MySQL-Perl bindings
 License:	GPL
 Group:		Development/Databases
-URL:		http://search.cpan.org/dist/%{module}
-Source:		http://www.cpan.org/modules/by-module/DBD/%{module}-%{version}.tar.gz
-BuildRequires:	perl-DBI
+URL:		http://search.cpan.org/dist/%{upstream_name}
+Source0:	http://www.cpan.org/modules/by-module/DBD/%{upstream_name}-%{upstream_version}.tar.gz
+
+BuildRequires:	perl(DBI)
 BuildRequires:	mysql-devel
+BuildRequires:	openssl-devel
 BuildRequires:	perl-devel
 BuildRequires:	zlib-devel
-BuildRequires:	openssl-devel
 Provides:	perl-Mysql
 Obsoletes:	perl-Mysql
-BuildRoot:	%{_tmppath}/%{name}-%{version}-%{release}-buildroot
+BuildRoot:	%{_tmppath}/%{name}-%{version}-%{release}
 
 %description
 DBD::mysql is an interface driver for connecting the DBMS independent Perl API
@@ -27,7 +30,7 @@ DBMS's.
 
 %prep
 
-%setup -q -n %{module}-%{version}
+%setup -q -n %{upstream_name}-%{upstream_version}
 
 %build
 %serverbuild
