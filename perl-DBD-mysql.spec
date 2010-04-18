@@ -1,5 +1,5 @@
 %define	upstream_name    DBD-mysql
-%define	upstream_version 4.013
+%define upstream_version 4.014
 %define Werror_cflags %nil
 
 Name:		perl-%{upstream_name}
