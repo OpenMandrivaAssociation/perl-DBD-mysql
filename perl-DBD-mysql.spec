@@ -1,10 +1,10 @@
 %define	upstream_name    DBD-mysql
-%define upstream_version 4.017
+%define upstream_version 4.018
 %define Werror_cflags %nil
 
 Name:		perl-%{upstream_name}
 Version:	%perl_convert_version %{upstream_version}
-Release:	%mkrel 3
+Release:	%mkrel 1
 
 Summary:	MySQL-Perl bindings
 License:	GPL
