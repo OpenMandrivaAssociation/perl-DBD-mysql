@@ -35,6 +35,10 @@ DBMS's.
 %build
 %serverbuild
 
+# it does not work with -fPIE and someone added that to the serverbuild macro...
+CFLAGS=`echo $CFLAGS|sed -e 's|-fPIE||g'`
+CXXFLAGS=`echo $CXXFLAGS|sed -e 's|-fPIE||g'`
+
 %{__perl} Makefile.PL INSTALLDIRS=vendor
 #--testhost=127.0.0.1 --testport=22222
 
