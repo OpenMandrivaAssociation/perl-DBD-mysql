@@ -1,2 +1,4 @@
+removed_sources:
+  DBD-mysql-4.025.tar.gz: 7c148d347988785239973835f8b5a8b78677ae47
 sources:
-  "DBD-mysql-4.025.tar.gz": 7c148d347988785239973835f8b5a8b78677ae47
+  DBD-mysql-4.026.tar.gz: f2fbedb534cb0d762c7b0c69af6de44207943cc3
