@@ -1,5 +1,5 @@
 %define	upstream_name    DBD-mysql
-%define upstream_version 4.026
+%define upstream_version 4.027
 %define Werror_cflags %nil
 
 Name:		perl-%{upstream_name}
@@ -10,7 +10,7 @@ Summary:	MySQL-Perl bindings
 License:	GPL
 Group:		Development/Databases
 URL:		http://search.cpan.org/dist/%{upstream_name}
-Source0:	http://www.cpan.org/modules/by-module/DBD/DBD-mysql-%{upstream_version}.tar.gz
+Source0:	http://www.cpan.org/modules/by-module/DBD/%{upstream_name}-%{upstream_version}.tar.gz
 
 BuildRequires:	perl(DBI)
 BuildRequires:	mysql-devel
@@ -249,5 +249,6 @@ CXXFLAGS=`echo $CXXFLAGS|sed -e 's|-fPIE||g'`
 - 2.9003
 - drop distribution tag
 - cosmetics
+
 
 
