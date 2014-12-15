@@ -1,10 +1,10 @@
 %define	upstream_name    DBD-mysql
-%define upstream_version 4.028
+%define upstream_version 4.029
 %define Werror_cflags %nil
 
 Name:		perl-%{upstream_name}
 Version:	%perl_convert_version %{upstream_version}
-Release:	5
+Release:	1
 
 Summary:	MySQL-Perl bindings
 License:	GPL
@@ -38,7 +38,7 @@ DBMS's.
 CFLAGS=`echo $CFLAGS|sed -e 's|-fPIE||g'`
 CXXFLAGS=`echo $CXXFLAGS|sed -e 's|-fPIE||g'`
 
-%{__perl} Makefile.PL INSTALLDIRS=vendor
+perl Makefile.PL INSTALLDIRS=vendor
 #--testhost=127.0.0.1 --testport=22222
 
 %make OPTIMIZE="$CFLAGS"
