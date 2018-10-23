@@ -3,5 +3,6 @@ removed_sources:
   DBD-mysql-4.026.tar.gz: f2fbedb534cb0d762c7b0c69af6de44207943cc3
   DBD-mysql-4.027.tar.gz: 3bf1edd6f0b4f6144b2aaa715c80df3fb1cd2119
   DBD-mysql-4.028.tar.gz: 23ea67b9531a7e72dfe525c8db0c43872526f67a
-sources:
   DBD-mysql-4.029.tar.gz: f4fae270b7aff4ffa626cabc6c3095390c71b802
+sources:
+  DBD-mysql-4.043.tar.gz: 2c925c74209a2f9484250dbb48e75a2e146d51b3
