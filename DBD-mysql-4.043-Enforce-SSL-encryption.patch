@@ -1,0 +1,324 @@
+diff --git a/MANIFEST b/MANIFEST
+index c4e16cc..577b029 100644
+--- a/MANIFEST
++++ b/MANIFEST
+@@ -70,6 +70,8 @@ t/88async-multi-stmts.t
+ t/89async-method-check.t
+ t/90no-async.t
+ t/91errcheck.t
++t/92ssl_backronym_vulnerability.t
++t/92ssl_riddle_vulnerability.t
+ t/99_bug_server_prepare_blob_null.t
+ t/lib.pl
+ t/manifest.t
+diff --git a/dbdimp.c b/dbdimp.c
+index 97fa9c4..7a71677 100644
+--- a/dbdimp.c
++++ b/dbdimp.c
+@@ -1506,6 +1506,12 @@ void do_warn(SV* h, int rc, char* what)
+     } \
+   }
+ 
++static void set_ssl_error(MYSQL *sock, const char *error)
++{
++  sock->net.last_errno = CR_SSL_CONNECTION_ERROR;
++  strcpy(sock->net.sqlstate, "HY000");
++  my_snprintf(sock->net.last_error, sizeof(sock->net.last_error)-1, "SSL connection error: %-.100s", error);
++}
+ 
+ /***************************************************************************
+  *
+@@ -1898,28 +1904,32 @@ MYSQL *mysql_dr_connect(
+         }
+ #endif
+ 
++	if ((svp = hv_fetch(hv, "mysql_ssl", 9, FALSE)) && *svp && SvTRUE(*svp))
++          {
+ #if defined(DBD_MYSQL_WITH_SSL) && !defined(DBD_MYSQL_EMBEDDED) && \
+     (defined(CLIENT_SSL) || (MYSQL_VERSION_ID >= 40000))
+-	if ((svp = hv_fetch(hv, "mysql_ssl", 9, FALSE))  &&  *svp)
+-        {
+-	  if (SvTRUE(*svp))
+-          {
+ 	    char *client_key = NULL;
+ 	    char *client_cert = NULL;
+ 	    char *ca_file = NULL;
+ 	    char *ca_path = NULL;
+ 	    char *cipher = NULL;
+ 	    STRLEN lna;
+-#if MYSQL_VERSION_ID >= SSL_VERIFY_VERSION && MYSQL_VERSION_ID <= SSL_LAST_VERIFY_VERSION
+-            /*
+-              New code to utilise MySQLs new feature that verifies that the
+-              server's hostname that the client connects to matches that of
+-              the certificate
+-            */
+-	    my_bool ssl_verify_true = 0;
+-	    if ((svp = hv_fetch(hv, "mysql_ssl_verify_server_cert", 28, FALSE))  &&  *svp)
+-	      ssl_verify_true = SvTRUE(*svp);
+-#endif
++	    unsigned int ssl_mode;
++	    my_bool ssl_enforce = 1;
++	    my_bool ssl_verify = 0;
++	    my_bool ssl_verify_set = 0;
++
++            /* Verify if the hostname we connect to matches the hostname in the certificate */
++	    if ((svp = hv_fetch(hv, "mysql_ssl_verify_server_cert", 28, FALSE)) && *svp) {
++  #if defined(HAVE_SSL_VERIFY) || defined(HAVE_SSL_MODE)
++	      ssl_verify = SvTRUE(*svp);
++	      ssl_verify_set = 1;
++  #else
++	      set_ssl_error(sock, "mysql_ssl_verify_server_cert=1 is not supported");
++	      return NULL;
++  #endif
++	    }
++
+ 	    if ((svp = hv_fetch(hv, "mysql_ssl_client_key", 20, FALSE)) && *svp)
+ 	      client_key = SvPV(*svp, lna);
+ 
+@@ -1941,13 +1951,84 @@ MYSQL *mysql_dr_connect(
+ 
+ 	    mysql_ssl_set(sock, client_key, client_cert, ca_file,
+ 			  ca_path, cipher);
+-#if MYSQL_VERSION_ID >= SSL_VERIFY_VERSION && MYSQL_VERSION_ID <= SSL_LAST_VERIFY_VERSION
+-	    mysql_options(sock, MYSQL_OPT_SSL_VERIFY_SERVER_CERT, &ssl_verify_true);
+-#endif
++
++	    if (ssl_verify && !(ca_file || ca_path)) {
++	      set_ssl_error(sock, "mysql_ssl_verify_server_cert=1 is not supported without mysql_ssl_ca_file or mysql_ssl_ca_path");
++	      return NULL;
++	    }
++
++  #ifdef HAVE_SSL_MODE
++
++	    if (ssl_verify)
++	      ssl_mode = SSL_MODE_VERIFY_IDENTITY;
++	    else if (ca_file || ca_path)
++	      ssl_mode = SSL_MODE_VERIFY_CA;
++	    else
++	      ssl_mode = SSL_MODE_REQUIRED;
++	    if (mysql_options(sock, MYSQL_OPT_SSL_MODE, &ssl_mode) != 0) {
++	      set_ssl_error(sock, "Enforcing SSL encryption is not supported");
++	      return NULL;
++	    }
++
++  #else
++
++    #if defined(HAVE_SSL_MODE_ONLY_REQUIRED)
++	      ssl_mode = SSL_MODE_REQUIRED;
++	      if (mysql_options(sock, MYSQL_OPT_SSL_MODE, &ssl_mode) != 0) {
++	        set_ssl_error(sock, "Enforcing SSL encryption is not supported");
++	        return NULL;
++	      }
++    #elif defined(HAVE_SSL_ENFORCE)
++	      if (mysql_options(sock, MYSQL_OPT_SSL_ENFORCE, &ssl_enforce) != 0) {
++	        set_ssl_error(sock, "Enforcing SSL encryption is not supported");
++	        return NULL;
++	      }
++    #elif defined(HAVE_SSL_VERIFY)
++	      if (!ssl_verify_also_enforce_ssl()) {
++	        set_ssl_error(sock, "Enforcing SSL encryption is not supported");
++	        return NULL;
++	      }
++	      if (ssl_verify_set && !ssl_verify) {
++	        set_ssl_error(sock, "Enforcing SSL encryption is not supported without mysql_ssl_verify_server_cert=1");
++	        return NULL;
++	      }
++	      ssl_verify = 1;
++    #else
++	      set_ssl_error(sock, "Enforcing SSL encryption is not supported");
++	      return NULL;
++    #endif
++
++	    if (ssl_verify) {
++	      if (!ssl_verify_usable() && ssl_verify_set) {
++	        set_ssl_error(sock, "mysql_ssl_verify_server_cert=1 is broken by current version of MySQL client");
++	        return NULL;
++	      }
++    #ifdef HAVE_SSL_VERIFY
++	      if (mysql_options(sock, MYSQL_OPT_SSL_VERIFY_SERVER_CERT, &ssl_verify) != 0) {
++	        set_ssl_error(sock, "mysql_ssl_verify_server_cert=1 is not supported");
++	        return NULL;
++	      }
++    #else
++	      set_ssl_error(sock, "mysql_ssl_verify_server_cert=1 is not supported");
++	      return NULL;
++    #endif
++	    }
++
++  #endif
++
+ 	    client_flag |= CLIENT_SSL;
++#else
++	    set_ssl_error(sock, "mysql_ssl=1 is not supported");
++	    return NULL;
++#endif
+ 	  }
+-	}
++	else
++	  {
++#ifdef HAVE_SSL_MODE
++	    unsigned int ssl_mode = SSL_MODE_DISABLED;
++	    mysql_options(sock, MYSQL_OPT_SSL_MODE, &ssl_mode);
+ #endif
++	  }
+ #if (MYSQL_VERSION_ID >= 32349)
+ 	/*
+ 	 * MySQL 3.23.49 disables LOAD DATA LOCAL by default. Use
+diff --git a/dbdimp.h b/dbdimp.h
+index 545beda..8aed561 100644
+--- a/dbdimp.h
++++ b/dbdimp.h
+@@ -48,8 +48,6 @@
+ #define LIMIT_PLACEHOLDER_VERSION 50007
+ #define GEO_DATATYPE_VERSION 50007
+ #define NEW_DATATYPE_VERSION 50003
+-#define SSL_VERIFY_VERSION 50023
+-#define SSL_LAST_VERIFY_VERSION 50799
+ #define MYSQL_VERSION_5_0 50001
+ /* This is to avoid the ugly #ifdef mess in dbdimp.c */
+ #if MYSQL_VERSION_ID < SQL_STATE_VERSION
+@@ -79,6 +77,58 @@
+ #define true 1
+ #define false 0
+ 
++#if defined(MARIADB_BASE_VERSION) || defined(MARIADB_VERSION_ID)
++#define MARIADB_CLIENT
++#endif
++
++/*
++ * Check which SSL settings are supported by API at compile time
++ */
++
++/* Use mysql_options with MYSQL_OPT_SSL_VERIFY_SERVER_CERT */
++#if ((MYSQL_VERSION_ID >= 50023 && MYSQL_VERSION_ID < 50100) || MYSQL_VERSION_ID >= 50111) && (MYSQL_VERSION_ID < 80000 || defined(MARIADB_CLIENT))
++#define HAVE_SSL_VERIFY
++#endif
++
++/* Use mysql_options with MYSQL_OPT_SSL_ENFORCE */
++#if !defined(MARIADB_CLIENT) && MYSQL_VERSION_ID >= 50703 && MYSQL_VERSION_ID < 80000 && MYSQL_VERSION_ID != 60000
++#define HAVE_SSL_ENFORCE
++#endif
++
++/* Use mysql_options with MYSQL_OPT_SSL_MODE */
++#if !defined(MARIADB_CLIENT) && MYSQL_VERSION_ID >= 50711 && MYSQL_VERSION_ID != 60000
++#define HAVE_SSL_MODE
++#endif
++
++/* Use mysql_options with MYSQL_OPT_SSL_MODE, but only SSL_MODE_REQUIRED is supported */
++#if !defined(MARIADB_CLIENT) && ((MYSQL_VERSION_ID >= 50636 && MYSQL_VERSION_ID < 50700) || (MYSQL_VERSION_ID >= 50555 && MYSQL_VERSION_ID < 50600))
++#define HAVE_SSL_MODE_ONLY_REQUIRED
++#endif
++
++/*
++ * Check which SSL settings are supported by API at runtime
++ */
++
++/* MYSQL_OPT_SSL_VERIFY_SERVER_CERT automatically enforce SSL mode */
++PERL_STATIC_INLINE bool ssl_verify_also_enforce_ssl(void) {
++#ifdef MARIADB_CLIENT
++	my_ulonglong version = mysql_get_client_version();
++	return ((version >= 50544 && version < 50600) || (version >= 100020 && version < 100100) || version >= 100106);
++#else
++	return false;
++#endif
++}
++
++/* MYSQL_OPT_SSL_VERIFY_SERVER_CERT is not vulnerable (CVE-2016-2047) and can be used */
++PERL_STATIC_INLINE bool ssl_verify_usable(void) {
++	my_ulonglong version = mysql_get_client_version();
++#ifdef MARIADB_CLIENT
++	return ((version >= 50547 && version < 50600) || (version >= 100023 && version < 100100) || version >= 100110);
++#else
++	return ((version >= 50549 && version < 50600) || (version >= 50630 && version < 50700) || version >= 50712);
++#endif
++}
++
+ /*
+  *  The following are return codes passed in $h->err in case of
+  *  errors by DBD::mysql.
+diff --git a/lib/DBD/mysql.pm b/lib/DBD/mysql.pm
+index dc5eb06..572c229 100644
+--- a/lib/DBD/mysql.pm
++++ b/lib/DBD/mysql.pm
+@@ -1160,7 +1160,8 @@ location for the socket than that built into the client.
+ =item mysql_ssl
+ 
+ A true value turns on the CLIENT_SSL flag when connecting to the MySQL
+-database:
++server and enforce SSL encryption.  A false value (which is default)
++disable SSL encryption with the MySQL server.
+ 
+ When enabling SSL encryption you should set also other SSL options,
+ at least mysql_ssl_ca_file or mysql_ssl_ca_path.
+diff --git a/t/92ssl_backronym_vulnerability.t b/t/92ssl_backronym_vulnerability.t
+new file mode 100644
+index 0000000..5237c6d
+--- /dev/null
++++ b/t/92ssl_backronym_vulnerability.t
+@@ -0,0 +1,30 @@
++use strict;
++use warnings;
++
++use Test::More;
++use DBI;
++
++use vars qw($test_dsn $test_user $test_password);
++use lib 't', '.';
++require "lib.pl";
++
++my $dbh;
++eval {$dbh= DBI->connect($test_dsn, $test_user, $test_password,
++                      { PrintError => 0, RaiseError => 1 });};
++if (!$dbh) {
++    plan skip_all => "no database connection";
++}
++
++my $have_ssl = eval { $dbh->selectrow_hashref("SHOW VARIABLES WHERE Variable_name = 'have_ssl'") };
++$dbh->disconnect();
++plan skip_all => 'Server supports SSL connections, cannot test false-positive enforcement' if $have_ssl and $have_ssl->{Value} eq 'YES';
++
++plan tests => 4;
++
++$dbh = DBI->connect($test_dsn, $test_user, $test_password, { PrintError => 0, RaiseError => 0, mysql_ssl => 1 });
++ok(!defined $dbh, 'DBD::mysql refused connection to non-SSL server with mysql_ssl=1 and correct user and password');
++is($DBI::err, 2026, 'DBD::mysql error message is SSL related') or diag('Error message: ' . ($DBI::errstr || 'unknown'));
++
++$dbh = DBI->connect($test_dsn, $test_user, $test_password, { PrintError => 0, RaiseError => 0, mysql_ssl => 1, mysql_ssl_verify_server_cert => 1, mysql_ssl_ca_file => "" });
++ok(!defined $dbh, 'DBD::mysql refused connection to non-SSL server with mysql_ssl=1, mysql_ssl_verify_server_cert=1 and correct user and password');
++is($DBI::err, 2026, 'DBD::mysql error message is SSL related') or diag('Error message: ' . ($DBI::errstr || 'unknown'));
+diff --git a/t/92ssl_riddle_vulnerability.t b/t/92ssl_riddle_vulnerability.t
+new file mode 100644
+index 0000000..2354a73
+--- /dev/null
++++ b/t/92ssl_riddle_vulnerability.t
+@@ -0,0 +1,30 @@
++use strict;
++use warnings;
++
++use Test::More;
++use DBI;
++
++use vars qw($test_dsn $test_user $test_password);
++use lib 't', '.';
++require "lib.pl";
++
++my $dbh;
++eval {$dbh= DBI->connect($test_dsn, $test_user, $test_password,
++                      { PrintError => 0, RaiseError => 1 });};
++if (!$dbh) {
++    plan skip_all => "no database connection";
++}
++
++my $have_ssl = eval { $dbh->selectrow_hashref("SHOW VARIABLES WHERE Variable_name = 'have_ssl'") };
++$dbh->disconnect();
++plan skip_all => 'Server supports SSL connections, cannot test false-positive enforcement' if $have_ssl and $have_ssl->{Value} eq 'YES';
++
++plan tests => 4;
++
++$dbh = DBI->connect($test_dsn, '4yZ73s9qeECdWi', '64heUGwAsVoNqo', { PrintError => 0, RaiseError => 0, mysql_ssl => 1 });
++ok(!defined $dbh, 'DBD::mysql refused connection to non-SSL server with mysql_ssl=1 and incorrect user and password');
++is($DBI::err, 2026, 'DBD::mysql error message is SSL related') or diag('Error message: ' . ($DBI::errstr || 'unknown'));
++
++$dbh = DBI->connect($test_dsn, '4yZ73s9qeECdWi', '64heUGwAsVoNqo', { PrintError => 0, RaiseError => 0, mysql_ssl => 1, mysql_ssl_verify_server_cert => 1, mysql_ssl_ca_file => "" });
++ok(!defined $dbh, 'DBD::mysql refused connection to non-SSL server with mysql_ssl=1, mysql_ssl_verify_server_cert=1 and incorrect user and password');
++is($DBI::err, 2026, 'DBD::mysql error message is SSL related') or diag('Error message: ' . ($DBI::errstr || 'unknown'));

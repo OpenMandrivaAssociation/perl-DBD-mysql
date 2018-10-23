@@ -1,0 +1,125 @@
+diff --git a/MANIFEST b/MANIFEST
+index 577b029..fba58e0 100644
+--- a/MANIFEST
++++ b/MANIFEST
+@@ -70,6 +70,7 @@ t/88async-multi-stmts.t
+ t/89async-method-check.t
+ t/90no-async.t
+ t/91errcheck.t
++t/92ssl_optional.t
+ t/92ssl_backronym_vulnerability.t
+ t/92ssl_riddle_vulnerability.t
+ t/99_bug_server_prepare_blob_null.t
+diff --git a/dbdimp.c b/dbdimp.c
+index 7a71677..4c510ca 100644
+--- a/dbdimp.c
++++ b/dbdimp.c
+@@ -1930,6 +1930,9 @@ MYSQL *mysql_dr_connect(
+   #endif
+ 	    }
+ 
++	    if ((svp = hv_fetch(hv, "mysql_ssl_optional", 18, FALSE)) && *svp)
++	      ssl_enforce = !SvTRUE(*svp);
++
+ 	    if ((svp = hv_fetch(hv, "mysql_ssl_client_key", 20, FALSE)) && *svp)
+ 	      client_key = SvPV(*svp, lna);
+ 
+@@ -1959,7 +1962,9 @@ MYSQL *mysql_dr_connect(
+ 
+   #ifdef HAVE_SSL_MODE
+ 
+-	    if (ssl_verify)
++	    if (!ssl_enforce)
++	      ssl_mode = SSL_MODE_PREFERRED;
++	    else if (ssl_verify)
+ 	      ssl_mode = SSL_MODE_VERIFY_IDENTITY;
+ 	    else if (ca_file || ca_path)
+ 	      ssl_mode = SSL_MODE_VERIFY_CA;
+@@ -1972,6 +1977,7 @@ MYSQL *mysql_dr_connect(
+ 
+   #else
+ 
++	    if (ssl_enforce) {
+     #if defined(HAVE_SSL_MODE_ONLY_REQUIRED)
+ 	      ssl_mode = SSL_MODE_REQUIRED;
+ 	      if (mysql_options(sock, MYSQL_OPT_SSL_MODE, &ssl_mode) != 0) {
+@@ -1997,9 +2003,17 @@ MYSQL *mysql_dr_connect(
+ 	      set_ssl_error(sock, "Enforcing SSL encryption is not supported");
+ 	      return NULL;
+     #endif
++	    }
++
++    #ifdef HAVE_SSL_VERIFY
++	    if (!ssl_enforce && ssl_verify && ssl_verify_also_enforce_ssl()) {
++	      set_ssl_error(sock, "mysql_ssl_optional=1 with mysql_ssl_verify_server_cert=1 is not supported");
++	      return NULL;
++	    }
++    #endif
+ 
+ 	    if (ssl_verify) {
+-	      if (!ssl_verify_usable() && ssl_verify_set) {
++	      if (!ssl_verify_usable() && ssl_enforce && ssl_verify_set) {
+ 	        set_ssl_error(sock, "mysql_ssl_verify_server_cert=1 is broken by current version of MySQL client");
+ 	        return NULL;
+ 	      }
+diff --git a/lib/DBD/mysql.pm b/lib/DBD/mysql.pm
+index 572c229..f49d408 100644
+--- a/lib/DBD/mysql.pm
++++ b/lib/DBD/mysql.pm
+@@ -1223,6 +1223,22 @@ cipher in the list is supported, encrypted connections will not work.
+   mysql_ssl_cipher=AES128-SHA
+   mysql_ssl_cipher=DHE-RSA-AES256-SHA:AES128-SHA
+ 
++=item mysql_ssl_optional
++
++Setting C<mysql_ssl_optional> to true disables strict SSL enforcement
++and makes SSL connection optional.  This option opens security hole
++for man-in-the-middle attacks.  Default value is false which means
++that C<mysql_ssl> set to true enforce SSL encryption.
++
++This option was introduced in 4.043 version of DBD::mysql.  Due to
++L<The BACKRONYM|http://backronym.fail/> and L<The Riddle|http://riddle.link/>
++vulnerabilities in libmysqlclient library, enforcement of SSL
++encryption was not possbile and therefore C<mysql_ssl_optional=1>
++was effectively set for all DBD::mysql versions prior to 4.043.
++Starting with 4.043, DBD::mysql with C<mysql_ssl=1> could refuse
++connection to MySQL server if underlaying libmysqlclient library is
++vulnerable.  Option C<mysql_ssl_optional> can be used to make SSL
++connection vulnerable.
+ 
+ =item mysql_local_infile
+ 
+diff --git a/t/92ssl_optional.t b/t/92ssl_optional.t
+new file mode 100644
+index 0000000..54790a3
+--- /dev/null
++++ b/t/92ssl_optional.t
+@@ -0,0 +1,28 @@
++use strict;
++use warnings;
++
++use Test::More;
++use DBI;
++
++use vars qw($test_dsn $test_user $test_password);
++use lib 't', '.';
++require "lib.pl";
++
++my $dbh;
++eval {$dbh= DBI->connect($test_dsn, $test_user, $test_password,
++                      { PrintError => 0, RaiseError => 1 });};
++if (!$dbh) {
++    plan skip_all => "no database connection";
++}
++
++my $have_ssl = eval { $dbh->selectrow_hashref("SHOW VARIABLES WHERE Variable_name = 'have_ssl'") };
++$dbh->disconnect();
++plan skip_all => 'Server supports SSL connections, cannot test fallback to plain text' if $have_ssl and $have_ssl->{Value} eq 'YES';
++
++plan tests => 2;
++
++$dbh = DBI->connect($test_dsn, $test_user, $test_password, { PrintError => 1, RaiseError => 0, mysql_ssl => 1, mysql_ssl_optional => 1 });
++ok(defined $dbh, 'DBD::mysql supports mysql_ssl_optional=1 and connect via plain text protocol when SSL is not supported by server') or diag('Error code: ' . ($DBI::err || 'none') . "\n" . 'Error message: ' . ($DBI::errstr || 'unknown'));
++
++$dbh = DBI->connect($test_dsn, $test_user, $test_password, { PrintError => 1, RaiseError => 0, mysql_ssl => 1, mysql_ssl_optional => 1, mysql_ssl_ca_file => "" });
++ok(defined $dbh, 'DBD::mysql supports mysql_ssl_optional=1 and connect via plain text protocol when SSL is not supported by server even with mysql_ssl_ca_file') or diag('Error code: ' . ($DBI::err || 'none') . "\n" . 'Error message: ' . ($DBI::errstr || 'unknown'));
