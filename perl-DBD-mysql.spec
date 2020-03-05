@@ -6,7 +6,7 @@
 Summary:	MySQL-Perl bindings
 Name:		perl-%{upstream_name}
 Version:	%perl_convert_version %{upstream_version}
-Release:	1
+Release:	2
 License:	GPLv2+
 Group:		Development/Perl
 Url:		http://metacpan.org/release/%{upstream_name}
@@ -46,8 +46,8 @@ CXXFLAGS=`echo $CXXFLAGS|sed -e 's|-fPIE||g'`
 perl Makefile.PL INSTALLDIRS=vendor
 #--testhost=127.0.0.1 --testport=22222
 
-%make OPTIMIZE="$CFLAGS"
+%make_build OPTIMIZE="$CFLAGS"
 
 %install
-%makeinstall_std
+%make_install
 
