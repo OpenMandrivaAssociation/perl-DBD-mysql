@@ -3,6 +3,11 @@
 %define upstream_name    DBD-mysql
 %define upstream_version 4.050
 
+%ifarch %{x86_64}
+# FIXME workaround for debuginfo gen bug
+%global _debugsource_template %{nil}
+%endif
+
 Summary:	MySQL-Perl bindings
 Name:		perl-%{upstream_name}
 Version:	%perl_convert_version %{upstream_version}
