@@ -11,7 +11,7 @@
 Summary:	MySQL-Perl bindings
 Name:		perl-%{upstream_name}
 Version:	%perl_convert_version %{upstream_version}
-Release:	5
+Release:	6
 License:	GPLv2+
 Group:		Development/Perl
 Url:		http://metacpan.org/release/%{upstream_name}
