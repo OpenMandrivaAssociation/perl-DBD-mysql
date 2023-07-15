@@ -1,3 +1,4 @@
+%define _empty_manifest_terminate_build 0
 %define Werror_cflags %{nil}
 
 %define upstream_name    DBD-mysql
