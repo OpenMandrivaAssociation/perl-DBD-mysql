@@ -15,7 +15,7 @@ Version:	%perl_convert_version %{upstream_version}
 Release:	6
 License:	GPLv2+
 Group:		Development/Perl
-Url:		http://metacpan.org/release/%{upstream_name}
+Url:		https://metacpan.org/release/%{upstream_name}
 Source0:	http://www.cpan.org/modules/by-module/DBD/%{upstream_name}-%{upstream_version}.tar.gz
 BuildRequires:	perl(DBI)
 BuildRequires:	mysql-devel
