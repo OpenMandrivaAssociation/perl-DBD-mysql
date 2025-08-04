@@ -6,13 +6,13 @@
 
 %ifarch %{x86_64}
 # FIXME workaround for debuginfo gen bug
-%global _debugsource_template %{nil}
+%global debug_package %{nil}
 %endif
 
 Summary:	MySQL-Perl bindings
 Name:		perl-%{upstream_name}
 Version:	%perl_convert_version %{upstream_version}
-Release:	7
+Release:	8
 License:	GPLv2+
 Group:		Development/Perl
 Url:		https://metacpan.org/release/%{upstream_name}
