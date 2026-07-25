@@ -2,7 +2,7 @@
 %define Werror_cflags %{nil}
 
 %define upstream_name    DBD-mysql
-%define upstream_version 4.050
+%define upstream_version 4.055
 
 %ifarch %{x86_64}
 # FIXME workaround for debuginfo gen bug
@@ -11,12 +11,12 @@
 
 Summary:	MySQL-Perl bindings
 Name:		perl-%{upstream_name}
-Version:	%perl_convert_version %{upstream_version}
-Release:	9
+Version:	%{upstream_version}
+Release:	1
 License:	GPLv2+
 Group:		Development/Perl
-Url:		https://metacpan.org/release/%{upstream_name}
-Source0:	http://www.cpan.org/modules/by-module/DBD/%{upstream_name}-%{upstream_version}.tar.gz
+Url:		https://github.com/perl5-dbi/DBD-mysql
+Source0:	https://cpan.metacpan.org/authors/id/D/DV/DVEEDEN/DBD-mysql-%{upstream_version}.tar.gz
 BuildRequires:	make
 BuildRequires:	perl(DBI)
 BuildRequires:	mysql-devel
