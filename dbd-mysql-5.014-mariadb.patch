@@ -1,0 +1,103 @@
+--- a/dbdimp.c
++++ b/dbdimp.c
+@@ -636,7 +636,11 @@
+             if (!is_num)
+             {
+               *ptr++ = '\'';
++#if defined(MARIADB_VERSION_ID)
++              ptr += mysql_real_escape_string(sock, ptr, valbuf, vallen);
++#else
+               ptr += mysql_real_escape_string_quote(sock, ptr, valbuf, vallen, '\'');
++#endif
+               *ptr++ = '\'';
+             }
+             else
+@@ -1242,7 +1246,7 @@
+             PerlIO_printf(DBIc_LOGPIO(imp_xxh),
+                           "imp_dbh->mysql_dr_connect: Enabling" \
+                           " compression algorithms: %s\n", calg);
+-#if MYSQL_VERSION_ID >= 80018
++#if !defined(MARIADB_VERSION_ID) && MYSQL_VERSION_ID >= 80018
+           mysql_options(sock, MYSQL_OPT_COMPRESSION_ALGORITHMS, calg);
+ #else
+           mysql_options(sock, MYSQL_OPT_COMPRESS, NULL);
+@@ -1413,8 +1417,10 @@
+         }
+ 
+         if ((svp = hv_fetch(hv, "mysql_get_server_pubkey", 23, FALSE)) && *svp && SvTRUE(*svp)) {
++#ifdef MYSQL_OPT_GET_SERVER_PUBLIC_KEY
+           bool server_get_pubkey = 1;
+           mysql_options(sock, MYSQL_OPT_GET_SERVER_PUBLIC_KEY, &server_get_pubkey);
++#endif
+         }
+ 
+         if ((svp = hv_fetch(hv, "mysql_server_pubkey", 19, FALSE)) && *svp) {
+@@ -1477,6 +1483,7 @@
+ 	    }
+ 
+ 
++#ifdef MYSQL_OPT_SSL_MODE
+         if (!ssl_enforce)
+           ssl_mode = SSL_MODE_PREFERRED;
+         else if (ssl_verify)
+@@ -1489,13 +1496,18 @@
+ 	      set_ssl_error(sock, "Enforcing SSL encryption is not supported");
+ 	      return NULL;
+ 	    }
++#else
++        (void)ssl_verify;
++#endif
+ 
+ 	    client_flag |= CLIENT_SSL;
+ 	  }
+ 	else
+ 	  {
++#ifdef MYSQL_OPT_SSL_MODE
+ 	    unsigned int ssl_mode = SSL_MODE_DISABLED;
+ 	    mysql_options(sock, MYSQL_OPT_SSL_MODE, &ssl_mode);
++#endif
+ 	  }
+ 	/*
+ 	 * MySQL 3.23.49 disables LOAD DATA LOCAL by default. Use
+@@ -2419,7 +2431,7 @@
+           bind->buffer_type=  MYSQL_TYPE_STRING;
+           bind->buffer=       NULL;
+           bind->length=       &(fbind->length);
+-          bind->is_null=      &(fbind->is_null);
++          bind->is_null=      (my_bool *)&(fbind->is_null);
+           fbind->is_null=     1;
+           fbind->length=      0;
+         }
+@@ -2855,7 +2867,7 @@
+ 
+   if (num_params > 0 && !(*has_been_bound))
+   {
+-#if MYSQL_VERSION_ID >= 80300
++#if !defined(MARIADB_VERSION_ID) && MYSQL_VERSION_ID >= 80300
+     if (mysql_stmt_bind_named_param(stmt,bind,num_params, NULL))
+ #else
+     if (mysql_stmt_bind_param(stmt,bind))
+@@ -3182,8 +3194,8 @@
+         PerlIO_printf(DBIc_LOGPIO(imp_xxh), "\t\tmysql_to_perl_type returned %d\n",
+                       col_type);
+       buffer->length= &(fbh->length);
+-      buffer->is_null= &(fbh->is_null);
+-      buffer->error= (bool*) &(fbh->error);
++      buffer->is_null= (my_bool *)&(fbh->is_null);
++      buffer->error= (my_bool *)&(fbh->error);
+ 
+       if (fields[i].flags & ZEROFILL_FLAG)
+         buffer->buffer_type = MYSQL_TYPE_STRING;
+@@ -4645,8 +4657,12 @@
+     sptr= SvPVX(result);
+ 
+     *sptr++ = '\'';
++#if defined(MARIADB_VERSION_ID)
++    sptr+= mysql_real_escape_string(imp_dbh->pmysql, sptr, ptr, len);
++#else
+     sptr+= mysql_real_escape_string_quote(imp_dbh->pmysql, sptr,
+                                      ptr, len, '\'');
++#endif
+     *sptr++= '\'';
+     SvPOK_on(result);
+     SvCUR_set(result, sptr - SvPVX(result));

@@ -2,7 +2,7 @@
 %define Werror_cflags %{nil}
 
 %define upstream_name    DBD-mysql
-%define upstream_version 4.055
+%define upstream_version 5.014
 
 %ifarch %{x86_64}
 # FIXME workaround for debuginfo gen bug
@@ -17,6 +17,10 @@ License:	GPLv2+
 Group:		Development/Perl
 Url:		https://github.com/perl5-dbi/DBD-mysql
 Source0:	https://cpan.metacpan.org/authors/id/D/DV/DVEEDEN/DBD-mysql-%{upstream_version}.tar.gz
+# MariaDB Connector/C reports MYSQL_VERSION_ID 130002, which is numerically
+# above the MySQL 8.0/8.3 gates in dbdimp.c, so those branches call APIs
+# MariaDB does not provide.
+Patch0:		dbd-mysql-5.014-mariadb.patch
 BuildRequires:	make
 BuildRequires:	perl(DBI)
 BuildRequires:	mysql-devel
